@@ -7,3 +7,5 @@ class CarItem(scrapy.Item):
     engine_size = scrapy.Field()
     car_type = scrapy.Field()
     price = scrapy.Field()
+    image_url = scrapy.Field()
+    swiper_images = scrapy.Field()

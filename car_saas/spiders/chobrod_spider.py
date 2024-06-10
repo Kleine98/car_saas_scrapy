@@ -17,12 +17,17 @@ class ChobrodSpider(scrapy.Spider):
 
         for car in car_list:
             name = car.css('div.info > div > h2 > a::text').get()
-            price = car.css('div.info > div > p::text').get()
+            price_text = car.css('div.info > div > p::text').get()
+            image_url = car.css('div.photo > a > img::attr(src)').get()
+            details_page_url = car.css('div.photo > a::attr(href)').get()
+
+            # Extract only numbers from the price text
+            price = re.sub(r'[^\d]', '', price_text) if price_text else None
 
             pattern = r'(\d{4})\s+([^0-9]+)\s+(\w+)\s+([\d.]+)\s+([\w\s]+)'
             thai_pattern = r'[\u0E00-\u0E7F]+'  # Unicode range for Thai letters
 
-            if name and price:
+            if name and price and image_url and details_page_url:
                 match = re.match(pattern, name)
                 if match:
                     year = match.group(1)
@@ -37,7 +42,25 @@ class ChobrodSpider(scrapy.Spider):
                         model=model,
                         engine_size=engine_size,
                         car_type=car_type,
-                        price=price
+                        price=price,
+                        image_url=image_url
                     )
 
-                    yield car_item
+                    # Follow the link to the car details page
+                    request = scrapy.Request(
+                        url=response.urljoin(details_page_url),
+                        callback=self.parse_car_details
+                    )
+                    request.meta['car_item'] = car_item
+                    yield request
+
+    def parse_car_details(self, response):
+        car_item = response.meta['car_item']
+
+        # Use CSS selector to select the swiper slides and extract their style attribute
+        slides_style = response.css('.swiper-slide::attr(style)').getall()
+
+        # Use regex pattern to extract the image URLs from the style attribute
+        car_item['swiper_images'] = [re.search(r'url\(["\']?(.*?)["\']?\)', style).group(1) for style in slides_style if re.search(r'url\(["\']?(.*?)["\']?\)', style)]
+
+        yield car_item
